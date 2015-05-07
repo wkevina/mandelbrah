@@ -34,191 +34,111 @@
 		<canvas id="canvas"></canvas>
 
 		<script type="text/javascript">
-				'use strict';
+				/* jshint browser: true, devel: true */
 
-				/* jshint browser: true */
+				(function() {
+					'use strict';
 
-				var scale = 0;
-				var limits = {};
-				limits.x = 0;
-				limits.y = 0;
+					var worker;
+					var scale = 0;
+					var limits = {};
+					limits.x = 0;
+					limits.y = 0;
 
-				var canvas = document.getElementById('canvas');
-				var ctx = canvas.getContext('2d');
+					var canvas = document.getElementById('canvas');
+					var ctx = canvas.getContext('2d');
 
-				function throttle(callback, delay) {
-					var timerId;
-					return function() {
-						if (timerId !== null) {
-							window.clearTimeout(timerId);
-							console.log("Clearing timer!");
-						}
-						timerId = window.setTimeout(callback, delay);
-						console.log("Setting timer");
-					}
-				}
+					window.onload = function() {
+						window.dispatchEvent(new UIEvent("resize"));
 
-				window.addEventListener("resize", throttle(draw, 100));
+						worker = new Worker('mandelWorker.js'); //getWorkers();
 
-				function draw() {
-
-					var oldw = canvas.clientWidth,
-						oldh = canvas.clientHeight;
-
-					var aspect = oldh / oldw;
-
-					canvas.width = limits.x = oldw * window.devicePixelRatio;
-					canvas.height = limits.y = oldh * window.devicePixelRatio;
-
-
-					// canvas is now configured
-
-					// must find a 4 x 3 area that fits on canvas
-
-					if (aspect < 2.5 / 3.5) {
-						// wider than tall
-						// height will be limiting dimension
-						scale = 2.5 / limits.y;
-
-					} else {
-						scale = 3.5 / limits.x;
-					}
-
-					mandelbrah();
-
-					var stats = '<p>' + (canvas.width * canvas.height).toLocaleString() + ' MP</p>';
-					stats += '<p>' + canvas.width + 'x' + canvas.height + ' px</p>';
-
-					document.getElementById('stats').innerHTML = stats;
-				}
-
-				window.dispatchEvent(new UIEvent("resize"));
-
-				function mandelbrah() {
-					//clear();
-
-					var data = ctx.createImageData(canvas.width, canvas.height);
-
-					for (var x = 0; x < limits.x; ++x) {
-						for (var y = 0; y < limits.y; ++y) {
-							drawPoint(x, y, data, 255);
-						}
-					}
-					ctx.putImageData(data, 0, 0);
-				}
-
-				function drawPoint(x, y, data, maxiter) {
-					// z^2 = (x^2 - y^2, 2xy)
-					// abs = sqrt(x^2 + y^2)
-
-					var coord = {
-						x: x,
-						y: y
+						worker.onmessage = handleMessage;
 					};
 
-					var p = canvasPointToSet(coord);
-					x = p.x;
-					y = p.y;
+					function handleMessage(oEvent) {
+						canvas.width = limits.x;
+						canvas.height = limits.y;
 
-					var z = {
-						x: 0,
-						y: 0
-					};
+						var stats = '<p>' + (canvas.width * canvas.height).toLocaleString() + ' MP</p>';
+						stats += '<p>' + canvas.width + 'x' + canvas.height + ' px</p>';
 
-					var mag2 = 0;
-					var temp;
-					var count = 0;
+						document.getElementById('stats').innerHTML = stats;
 
-					var x2 = 0;
-					var y2 = 0;
+						var buffer = oEvent.data.buffer;
 
-					while (mag2 < 1e6 && count < maxiter) {
-						++count;
+						var imageData = new ImageData(new Uint8ClampedArray(buffer), limits.x, limits.y);
+						ctx.putImageData(imageData, 0, 0);
+						draw.busy = false;
+					}
 
-						x2 = z.x * z.x;
-						y2 = z.y * z.y;
-
-						temp = {
-							x: x2 - y2 + x,
-							y: 2 * z.x * z.y + y
+					function throttle(callback, delay) {
+						var timerId;
+						return function() {
+							if (timerId !== null) {
+								window.clearTimeout(timerId);
+							}
+							timerId = window.setTimeout(callback, delay);
 						};
-						z = temp;
-						mag2 = x2 + y2;
+					}
 
-						if (!isFinite(mag2) || isNaN(mag2)) {
-							mag2 = Number.MAX_VALUE;
+					window.addEventListener("resize", throttle(draw, 100));
+
+					function draw() {
+
+						if (draw.busy === undefined)
+							draw.busy = false;
+
+						if (draw.busy)
+							return;
+
+						draw.busy = true;
+
+						var oldw = canvas.clientWidth,
+							oldh = canvas.clientHeight;
+
+						var aspect = oldh / oldw;
+
+						limits.x = oldw * window.devicePixelRatio;
+						limits.y = oldh * window.devicePixelRatio;
+
+
+						// canvas is now configured
+
+						// must find a 4 x 3 area that fits on canvas
+
+						if (aspect < 2.5 / 3.5) {
+							// wider than tall
+							// height will be limiting dimension
+							scale = 2.5 / limits.y;
+
+						} else {
+							scale = 3.5 / limits.x;
 						}
-					}
 
-					var index = (data.width * coord.y + coord.x) * 4;
-
-					if (mag2 < 4) {
-
-						data.data[index] = 255;
-						data.data[index + 1] = 255;
-						data.data[index + 2] = 255;
-						data.data[index + 3] = 255;
-
-					} else {
-
-						var value = Math.log(count);
-						var valueScale = Math.log(maxiter);
-						var ratio = value / valueScale
-						var c = hslToRgb(ratio*0.3 + 0.9, ratio*0.2 + 0.8, ratio*0.5 + 0.05);
-
-						data.data[index] = c[0];
-						data.data[index + 1] = c[1];
-						data.data[index + 2] = c[2];
-						data.data[index + 3] = 255;
-					}
-				}
-
-				function canvasPointToSet(p) {
-					var x = p.x * scale - limits.x * scale * 0.6;
-					var y = p.y * scale - limits.y * scale * 0.5;
-					return {
-						x: x,
-						y: y
-					};
-				}
-
-				/**
-				 * Converts an HSL color value to RGB. Conversion formula
-				 * adapted from http://en.wikipedia.org/wiki/HSL_color_space.
-				 * Assumes h, s, and l are contained in the set [0, 1] and
-				 * returns r, g, and b in the set [0, 255].
-				 *
-				 * @param   Number  h       The hue
-				 * @param   Number  s       The saturation
-				 * @param   Number  l       The lightness
-				 * @return  Array           The RGB representation
-				 */
-				function hslToRgb(h, s, l) {
-					var r, g, b;
-
-					h = h % 1;
-
-					if (s === 0) {
-						r = g = b = l; // achromatic
-					} else {
-						var hue2rgb = function hue2rgb(p, q, t) {
-							if (t < 0) t += 1;
-							if (t > 1) t -= 1;
-							if (t < 1 / 6) return p + (q - p) * 6 * t;
-							if (t < 1 / 2) return q;
-							if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-							return p;
+						var setup = {
+							scale: scale,
+							limits: limits,
 						};
 
-						var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-						var p = 2 * l - q;
-						r = hue2rgb(p, q, h + 1 / 3);
-						g = hue2rgb(p, q, h);
-						b = hue2rgb(p, q, h - 1 / 3);
+						worker.postMessage(setup);
+
 					}
 
-					return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
-				}
+					function getWorkers() {
+						var blob = new Blob(Array.prototype.map.call(document.querySelectorAll("script[type=\"text\/js-worker\"]"), function(oScript) {
+							return oScript.textContent;
+						}), {
+							type: "text/javascript"
+						});
+
+						// Creating a new document.worker property containing all our "text/js-worker" scripts.
+						var worker = new Worker(window.URL.createObjectURL(blob));
+
+						return worker;
+					}
+
+				})();
 		</script>
 
 		<div class="absolute">
