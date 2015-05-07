@@ -38,12 +38,6 @@
 
 				/* jshint browser: true */
 
-				var RESTRICT = false;
-				// IMPORTANT!!!!!
-				if (navigator.userAgent.match(/(iPod|iPhone|iPad)/) && navigator.userAgent.match(/AppleWebKit/)) {
-					//RESTRICT = true;
-				}
-
 				var scale = 0;
 				var limits = {};
 				limits.x = 0;
@@ -51,7 +45,6 @@
 
 				var canvas = document.getElementById('canvas');
 				var ctx = canvas.getContext('2d');
-
 
 				function throttle(callback, delay) {
 					var timerId;
@@ -74,45 +67,23 @@
 
 					var aspect = oldh / oldw;
 
-
-					if (RESTRICT) { // we need to keep it under 5 MP
-
-						/*var bytes = oldw * oldh * window.devicePixelRatio * window.devicePixelRatio;
-
-						if (bytes >= 5000000) {
-							// recalculate dimensions
-							var newy = Math.floor(aspect * 4999999); // x*y = m ; (y/x)x*y = m*(y/x)
-							var newx = Math.floor(4999999 / newy);
-
-							canvas.width = limits.x = newx;
-							canvas.height = limits.y = newy;
-						} else {
-							canvas.width = limits.x = oldw * window.devicePixelRatio;
-							canvas.height = limits.y = oldh * window.devicePixelRatio;
-						}*/
-						canvas.width = limits.x = oldw;
-						canvas.height = limits.y = oldh;
-
-					} else {
-						canvas.width = limits.x = oldw * window.devicePixelRatio;
-						canvas.height = limits.y = oldh * window.devicePixelRatio;
-					}
+					canvas.width = limits.x = oldw * window.devicePixelRatio;
+					canvas.height = limits.y = oldh * window.devicePixelRatio;
 
 
 					// canvas is now configured
 
 					// must find a 4 x 3 area that fits on canvas
 
-					if (aspect < 3 / 4) {
+					if (aspect < 2.5 / 3.5) {
 						// wider than tall
 						// height will be limiting dimension
-						scale = 3 / limits.y;
+						scale = 2.5 / limits.y;
 
 					} else {
-						scale = 4 / limits.x;
+						scale = 3.5 / limits.x;
 					}
 
-					console.log([scale * canvas.width, scale * canvas.height]);
 					mandelbrah();
 
 					var stats = '<p>' + (canvas.width * canvas.height).toLocaleString() + ' MP</p>';
@@ -123,11 +94,6 @@
 
 				window.dispatchEvent(new UIEvent("resize"));
 
-				function clear() {
-					ctx.fillStyle = "rgb(255,255,255)";
-					ctx.fillRect(0, 0, limits.x, limits.y);
-				}
-
 				function mandelbrah() {
 					//clear();
 
@@ -135,7 +101,7 @@
 
 					for (var x = 0; x < limits.x; ++x) {
 						for (var y = 0; y < limits.y; ++y) {
-							drawPoint(x, y, data, 60);
+							drawPoint(x, y, data, 255);
 						}
 					}
 					ctx.putImageData(data, 0, 0);
@@ -166,7 +132,7 @@
 					var x2 = 0;
 					var y2 = 0;
 
-					while (mag2 <= 4 && count < maxiter) {
+					while (mag2 < 1e6 && count < maxiter) {
 						++count;
 
 						x2 = z.x * z.x;
@@ -178,39 +144,37 @@
 						};
 						z = temp;
 						mag2 = x2 + y2;
+
+						if (!isFinite(mag2) || isNaN(mag2)) {
+							mag2 = Number.MAX_VALUE;
+						}
 					}
 
 					var index = (data.width * coord.y + coord.x) * 4;
 
 					if (mag2 < 4) {
-						//ctx.fillStyle = "rgb(0,0,0)";
-						//ctx.fillRect(coord.x, coord.y, 1, 1);
+
 						data.data[index] = 255;
 						data.data[index + 1] = 255;
 						data.data[index + 2] = 255;
 						data.data[index + 3] = 255;
 
 					} else {
-						//var h = Math.floor(count * 360 / 101);
-						//ctx.fillStyle = "hsl(" + [h, '100%', count + '%'].join(',') + ')';
-						//ctx.fillRect(coord.x, coord.y, 1, 1);
 
 						var value = Math.log(count);
 						var valueScale = Math.log(maxiter);
 						var ratio = value / valueScale
-						var c = hslToRgb(ratio * 0.1 + 0.9, ratio, count / maxiter);
+						var c = hslToRgb(ratio*0.3 + 0.9, ratio*0.2 + 0.8, ratio*0.5 + 0.05);
 
 						data.data[index] = c[0];
 						data.data[index + 1] = c[1];
 						data.data[index + 2] = c[2];
 						data.data[index + 3] = 255;
 					}
-
-					// (x - y)^2 + (x + y)^2
 				}
 
 				function canvasPointToSet(p) {
-					var x = p.x * scale - limits.x * scale * 2 / 3;
+					var x = p.x * scale - limits.x * scale * 0.6;
 					var y = p.y * scale - limits.y * scale * 0.5;
 					return {
 						x: x,
@@ -232,7 +196,9 @@
 				function hslToRgb(h, s, l) {
 					var r, g, b;
 
-					if (s == 0) {
+					h = h % 1;
+
+					if (s === 0) {
 						r = g = b = l; // achromatic
 					} else {
 						var hue2rgb = function hue2rgb(p, q, t) {
@@ -242,7 +208,7 @@
 							if (t < 1 / 2) return q;
 							if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
 							return p;
-						}
+						};
 
 						var q = l < 0.5 ? l * (1 + s) : l + s - l * s;
 						var p = 2 * l - q;
